@@ -9,6 +9,10 @@ from ..scope import SCOPE_NAMES
 from ..utils import now
 from .models import Client, Grant, RefreshToken
 
+try:
+    from social_auth.backends import get_backend
+except:
+    pass
 
 class ClientForm(forms.ModelForm):
     """
@@ -295,6 +299,38 @@ class PasswordGrantForm(ScopeMixin, OAuthForm):
 
         user = authenticate(username=data.get('username'),
             password=data.get('password'))
+
+        if user is None:
+            raise OAuthValidationError({'error': 'invalid_grant'})
+
+        data['user'] = user
+        return data
+
+class FacebookGrantForm(ScopeMixin, OAuthForm):
+    """
+    Validate the facebook token of a user on a password grant request.
+    """
+
+    def __init__(self, *args, **kwargs):
+        self.request = kwargs.pop('request', None)
+        super(FacebookGrantForm, self).__init__(*args, **kwargs)
+
+    token = forms.CharField(required=False)
+    scope = ScopeChoiceField(choices=SCOPE_NAMES, required=False)
+
+    def clean_token(self):
+        token = self.cleaned_data.get('token')
+
+        if not token:
+            raise OAuthValidationError({'error': 'invalid_request'})
+
+        return token
+
+    def clean(self):
+        data = self.cleaned_data
+
+        social_auth_backend = get_backend('facebook', self.request, '')
+        user = social_auth_backend.do_auth(data.get('token'))
 
         if user is None:
             raise OAuthValidationError({'error': 'invalid_grant'})
